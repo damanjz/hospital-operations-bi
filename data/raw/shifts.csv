@@ -1,0 +1,4 @@
+shift,starts,ends
+Morning,07:00,15:00
+Evening,15:00,23:00
+Night,23:00,07:00
