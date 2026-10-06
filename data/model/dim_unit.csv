@@ -1,0 +1,5 @@
+unit,patients_per_nurse_target,beds,unit_order
+ER,4.0,0,1
+General Ward,6.0,144,4
+ICU,2.0,32,2
+Surgery,5.0,80,3
