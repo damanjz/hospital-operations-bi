@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hospital Operations: how it works</title>
+<style>
+  :root {
+    --paper: #fbfaf7; --rail: #f2efe7; --rule: #e3ded2;
+    --text: #1d2330; --muted: #5b6170; --ink: #2f55b0; --teal: #1f8f7a;
+    --serif: Georgia, "Times New Roman", serif;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+  }
+  @page { size: A4; margin: 15mm; }
+  * { box-sizing: border-box; }
+  html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { margin: 0; background: var(--paper); color: var(--text); font: 10pt/1.55 var(--sans); }
+  main { max-width: 820px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 400; margin: 0; }
+  h1 { font-size: 26pt; line-height: 1.15; }
+  h2 { font-size: 16pt; margin: 32px 0 8px; padding-top: 12px; border-top: 1px solid var(--rule); }
+  h3 { font-size: 12pt; margin: 18px 0 4px; }
+  p { margin: 0 0 9px; }
+  .lede { font: 12pt/1.5 var(--serif); color: var(--muted); margin: 8px 0 10px; }
+  .eyebrow { font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink); margin-bottom: 8px; }
+  .muted { color: var(--muted); }
+  code { font: 8.8pt var(--mono); background: var(--rail); padding: 1px 4px; }
+  pre { font: 8.6pt/1.5 var(--mono); background: var(--rail); padding: 10px 12px; margin: 8px 0 12px; white-space: pre-wrap; break-inside: avoid; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 14px; font-size: 9.2pt; }
+  tr { break-inside: avoid; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 8.3pt; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--text); padding: 5px 8px 4px 0; }
+  td { border-bottom: 1px solid var(--rule); padding: 5px 8px 5px 0; vertical-align: top; }
+  td:first-child { white-space: nowrap; }
+  ul, ol { margin: 0 0 9px; padding-left: 18px; } li { margin: 3px 0; }
+  .callout { background: var(--rail); border-left: 3px solid var(--ink); padding: 10px 14px; margin: 12px 0; break-inside: avoid; }
+  .callout p:last-child { margin: 0; }
+  h2, h3 { break-after: avoid; }
+  @media print { main { padding: 0; max-width: none; } }
+  @media (max-width: 640px) { h1 { font-size: 21pt; } td:first-child { white-space: normal; } }
+</style>
+</head>
+<body>
+<main>
+
+<div class="eyebrow">Peer review guide</div>
+<h1>How it works</h1>
+<p class="lede">A walkthrough of the project for reviewers: what each part does, how data moves from raw hospital exports to the Power BI report, how correctness is enforced, and where your eyes are most useful.</p>
+<p class="muted">Companion to the case study. Paths are relative to the project folder.</p>
+
+<h2>1. The flow in one picture</h2>
+<pre>src/generate.py ──► data/raw/*.csv (9 exports)
+                         │
+src/pipeline.py ─────────┤  runs, in order:
+                         ├─ sql/01_staging.sql   type raw files, drop resent rows
+                         ├─ sql/02_model.sql     dimensions, facts, hourly census
+                         ├─ sql/03_features.sql  discharges, 30-day label, LACE
+                         ├─ src/model.py         model, calibration, fairness
+                         ├─ sql/04_marts.sql     report tables
+                         ├─ sql/checks.sql       18 checks; any failure stops the build
+                         └─ export ──► data/model/*.csv (12 tables)
+                                              │
+powerbi/build_pbip.py ────────────────────────┴─► powerbi/PatientFlow.pbip
+                                                   ├─ PatientFlow.SemanticModel (TMDL)
+                                                   └─ PatientFlow.Report (PBIR)</pre>
+<p>Everything downstream of <code>generate.py</code> is deterministic: same seed, same data, same model, same numbers. Two full rebuilds from scratch produce identical raw files, model tables and Power BI project.</p>
+
+<h2>2. Running it</h2>
+<pre>python -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python src\generate.py          # writes data/raw (30 s)
+.venv\Scripts\python src\pipeline.py          # builds, trains, checks, exports (40 s)
+.venv\Scripts\python powerbi\build_pbip.py    # writes powerbi/PatientFlow.pbip</pre>
+<p>Open <code>powerbi\PatientFlow.pbip</code> in Power BI Desktop (free) and choose Refresh. The model reads the CSVs in <code>data\model</code>; if the project sits somewhere else, change the <i>DataFolder</i> parameter (Transform data, Edit parameters), or build with <code>--portable</code> and place the project at <code>C:\hospital-operations-bi</code>. Tested on Power BI Desktop 2.158 (September 2026) for Windows.</p>
+<p class="muted">Expected <code>pipeline.py</code> output: three "built" lines, "trained model: Logistic regression, test ROC AUC 0.786 (LACE 0.749), top-decile capture 34.9%", "built 04_marts.sql", 18 lines starting with <code>pass</code>, then "exported 12 tables".</p>
+
+<h2>3. Stage by stage</h2>
+
+<h3>3.1 Simulator: <code>src/generate.py</code></h3>
+<p>One event-driven simulation of the hospital from 1 April 2023 to 31 March 2026. Events (arrivals, doctors finishing, bed requests, cleaning done, step-downs, discharges, shift changes, hourly overflow checks) sit in one time-ordered queue, so every part of the hospital affects the others.</p>
+<table>
+  <tr><th>Mechanism</th><th>How it works</th></tr>
+  <tr><td>Reproducibility</td><td>One seeded random generator (<code>SEED = 7</code>). Every patient, time and outcome comes from it.</td></tr>
+  <tr><td>ER arrivals</td><td>A Poisson count per hour: 132 a day base, shaped by hour of day (peaks late morning and 18:00 to 21:00), weekday (Monday 1.13, Sunday 0.90), month (August and September about 1.25, the dengue season) and 4% growth a year. 22% of arrivals are existing patients.</td></tr>
+  <tr><td>Triage and the doctor queue</td><td>ESI 1 to 5, more acute with age. Doctors on duty by shift: 4 morning, 3 evening (4 from April 2025), 3 night. The queue is first come, first served with an acuity offset (ESI 1 straight in, ESI 2 jumps 90 minutes, ESI 4 and 5 wait 40 to 60 minutes longer), so low-acuity patients are delayed but not starved. ESI 4 and 5 patients leave unseen once the wait passes their patience (gamma, mean about 4 hours).</td></tr>
+  <tr><td>Admission</td><td>Probability by triage level and age. The diagnosis comes from 12 emergency groups (dengue much more likely July to October) plus two planned surgery groups (about 16 a day Monday to Friday, 8 on Saturday, none on Sunday).</td></tr>
+  <tr><td>Beds</td><td>ICU 32, Surgery 80, General Ward 128, plus a 16-bed bay from October 2024. A patient boards in the ER until a bed in the right unit is free; ICU requests go first. Each emptied bed takes 25 to 200 minutes to clean. ICU patients step down to a ward bed and keep the ICU bed until one is free. Ward patients waiting over four hours take a spare surgical bed if more than six are free.</td></tr>
+  <tr><td>Discharge</td><td>Length of stay is lognormal around each diagnosis's mean, longer with age. Discharges cluster between 10:00 and 19:30; on Sundays more than half slip to Monday. When a unit has a queue in the daytime, the patient nearest planned discharge (within 30 hours) is sent home early half the time.</td></tr>
+  <tr><td>Outcome</td><td>In-hospital death rises with age and ICU stay; 2% leave against medical advice, 1% are transferred out.</td></tr>
+  <tr><td>Readmission</td><td>For each patient sent home, a planted 30-day risk on the log-odds scale: diagnosis effect, +0.016 per year of age over 50, +0.2 per Charlson point, +0.22 per prior ER visit (up to 4), very short emergency stays and stays over 10 days, weekend discharge, early discharge under bed pressure (+0.8), and a hidden per-patient factor (standard deviation 0.9) the model can't see. A readmitted patient returns through the ER as a new arrival.</td></tr>
+  <tr><td>Roster</td><td>Nurses per unit and shift (ER 11/11/8, ICU 15/14/13, Surgery 15/13/11, Ward 22/20/16), less one 12% of the time for uncovered sick leave. Two more ER evening nurses from April 2025.</td></tr>
+</table>
+<p class="muted">The ER export uses day-first timestamps and "ESI-n" codes and resends 0.4% of rows, so staging has real work to do.</p>
+
+<h3>3.2 Staging: <code>sql/01_staging.sql</code></h3>
+<p>Reads every CSV as text and casts explicitly. ER timestamps are parsed from <code>dd-mm-yyyy hh:mm</code>; triage becomes an integer; empty strings become NULL; identical resent rows collapse with <code>SELECT DISTINCT</code>. No business logic lives here.</p>
+
+<h3>3.3 Model: <code>sql/02_model.sql</code></h3>
+<table>
+  <tr><th>Table</th><th>Built how</th></tr>
+  <tr><td><code>dim_date</code>, <code>dim_hour</code></td><td>Every day with month, Indian financial year (April to March) and weekday; every hour with its shift.</td></tr>
+  <tr><td><code>dim_unit</code>, <code>dim_bed</code></td><td>Units with beds and patients-per-nurse targets (ER 4, ICU 2, Surgery 5, Ward 6); every bed with its bay, slot and in-service date.</td></tr>
+  <tr><td><code>fact_er_visits</code></td><td>One row per visit: wait to the first doctor, time in the ER, boarding time (admission decision to leaving the ER), left-unseen and admitted flags.</td></tr>
+  <tr><td><code>fact_admissions</code></td><td>Length of stay, age at admission, Charlson score (weighted sum of recorded conditions), first and discharging unit, whether the stay included ICU.</td></tr>
+  <tr><td><code>fact_unit_hourly</code></td><td>Every hour × every unit (105,216 rows): beds in service, patients in beds, beds being cleaned, and for the ER patients present, waiting and boarding; nurses and doctors on duty from the roster. Built with range joins between hours and stays. Anything still open at the cut-off counts as ongoing.</td></tr>
+</table>
+
+<h3>3.4 Features and the model: <code>sql/03_features.sql</code>, <code>src/model.py</code></h3>
+<table>
+  <tr><th>Step</th><th>How it works</th></tr>
+  <tr><td>Index discharges</td><td>Every admission that ended with the patient going home. Deaths, transfers and discharges against advice are excluded.</td></tr>
+  <tr><td>Label</td><td>An emergency admission of the same patient within 30 days. Discharges in the last 30 days of data get no label (NULL), not a zero.</td></tr>
+  <tr><td>Features</td><td>Ten, listed in <code>model_features</code>: age, length of stay, Charlson, ER visits in the 182 days before the visit, admissions in the 365 days before, occupancy of the discharging unit in the hour of discharge, ICU stay, weekend discharge, emergency admission, diagnosis. <code>model.py</code> asserts none is protected and a check repeats the test.</td></tr>
+  <tr><td>LACE</td><td>L: 0 to 7 points by length of stay; A: 3 for an emergency admission; C: Charlson score, 4 or more counts 5; E: prior ER visits, capped at 4. High risk means 10 or more.</td></tr>
+  <tr><td>Split</td><td>Out of time: train on discharges to 30 September 2024 (22,907), test from 1 April 2025 (14,754). The six months between are unused.</td></tr>
+  <tr><td>Models</td><td>Logistic regression (scaled, one-hot diagnosis) and histogram gradient boosting (depth 3, 300 iterations). Logistic is preferred unless the other beats it by at least 0.01 AUC; it didn't (0.786 against 0.784).</td></tr>
+  <tr><td>Comparison with LACE</td><td>ROC AUC, precision-recall AUC, and readmissions caught when each method flags the same share of discharges as LACE's 10-or-more flag (19.3%).</td></tr>
+  <tr><td>Outputs</td><td>Metrics, calibration by decile, permutation importance, fairness by sex, payer and age group, then a refit on every labelled discharge to score all discharges home. Top 10% of scores = High, next 20% = Medium.</td></tr>
+  <tr><td>Reasons</td><td>For each discharge the model is re-scored with one factor reset to a typical value (median for length of stay, occupancy and age; zero for weekend discharge, ER visits, admissions and Charlson). Factors that cut the score by more than half a percentage point are listed, largest first, up to two.</td></tr>
+</table>
+<p class="muted">The model's input query sorts its rows, so the gradient-boosting validation split and every result are the same on every run.</p>
+
+<h3>3.5 Marts: <code>sql/04_marts.sql</code></h3>
+<table>
+  <tr><th>Mart</th><th>Definition</th></tr>
+  <tr><td><code>mart_discharges</code></td><td>Every discharge home with its label, length-of-stay and occupancy bands, LACE, risk score, percentile, band and reasons.</td></tr>
+  <tr><td><code>mart_er_visits</code></td><td>ER visits with the columns the report uses.</td></tr>
+</table>
+<p>The report also imports the dimensions, <code>fact_bed_stays</code>, <code>fact_unit_hourly</code> and the model tables directly.</p>
+
+<h3>3.6 Checks: <code>sql/checks.sql</code></h3>
+<p>Each check is a query that returns the rows breaking a rule. <code>pipeline.py</code> runs them all, prints pass or fail, and exits with an error before exporting anything if any fail.</p>
+<table>
+  <tr><th>Area</th><th>Checks</th></tr>
+  <tr><td>Staging</td><td>Resent ER rows removed and nothing else.</td></tr>
+  <tr><td>ER</td><td>Timestamps in order; patients who left unseen were never seen; every admitted visit has exactly one admission starting the minute the patient left the ER.</td></tr>
+  <tr><td>Beds</td><td>No bed holds two patients; a bed is cleaned before the next patient; each admission's stays join end to end from admission to discharge; beds used only while in service.</td></tr>
+  <tr><td>Census</td><td>Never more patients plus cleaning than beds; occupied and ER waiting counts match direct counts from the stays and visits (sampled at three hours of every day); the roster covers every hour of every unit.</td></tr>
+  <tr><td>Readmissions</td><td>Index discharges exclude deaths, transfers and discharges against advice; the flag matches a direct recount; no outcome without 30 days of follow-up; LACE parts in range and summing to the total.</td></tr>
+  <tr><td>Model</td><td>No sex, payer, age group or patient ID among the features; one score in [0, 1] per discharge home.</td></tr>
+</table>
+<p><code>src/mutation_test.py</code> tests the checks: on a copy of the database it breaks the data the way each check guards against, one at a time, and confirms that check fails. 18 of 18 are caught.</p>
+
+<h3>3.7 Power BI generation: <code>powerbi/build_pbip.py</code></h3>
+<ul>
+  <li><b>Format.</b> A PBIP project: the semantic model in TMDL and the report in PBIR, both plain text that diffs cleanly. Column types come from the DuckDB schema, so the model can't drift from the data.</li>
+  <li><b>Model.</b> 13 tables, 9 relationships (date, hour, unit and bed dimensions filtering the facts), 36 DAX measures, each with a description.</li>
+  <li><b>Now page.</b> Three disconnected slicers (month, day, hour) set one <i>As-of time</i>. Bed status is computed per bed at that time from the bed stays; unit counts and staffing come from the census row for that hour. A matrix of bays × slots, coloured by a measure that returns a hex code, is the bed board.</li>
+  <li><b>Review pages.</b> Period and unit slicers synced across both pages. The heatmaps are matrices coloured on an eight-step scale. The follow-up list ignores the period and age filters (page-level interaction setting), so it always shows the latest discharges.</li>
+  <li><b>Switches.</b> <code>--portable</code> uses a neutral data path; <code>--asof "2025-09-18 12"</code> and <code>--period "FY 2025-26"</code> open the report at another moment or year; <code>--out</code> writes a copy elsewhere (used for screenshots).</li>
+</ul>
+
+<h3>3.8 Helper scripts</h3>
+<table>
+  <tr><th>Script</th><th>Purpose</th></tr>
+  <tr><td><code>powerbi/validate_tmdl.ps1</code></td><td>Parses the model with Power BI Desktop's own TMDL serializer, without opening Desktop.</td></tr>
+  <tr><td><code>powerbi/open_pbip.ps1</code></td><td>Opens the project in a new Power BI window, loads the data, captures that window and closes only that window; on a failed launch it closes its own window too. <code>-Keep</code> leaves it open for queries.</td></tr>
+  <tr><td><code>powerbi/check_report.py</code></td><td>Runs 63 DAX queries against the open report and the same figures as independent SQL against DuckDB, and compares them.</td></tr>
+  <tr><td><code>powerbi/query_desktop.ps1</code></td><td>Runs one DAX query against the open report.</td></tr>
+  <tr><td><code>docs/capture_docs.ps1</code>, <code>powerbi/crop_canvas.ps1</code></td><td>Case-study images: builds screenshot copies, captures each page, crops to the report canvas by its paper colour.</td></tr>
+  <tr><td><code>docs/charts.py</code>, <code>docs/build_pdf.ps1</code></td><td>Draws the calibration chart from the model table; prints the docs to PDF with headless Edge; <code>-Review</code> also renders every page for layout review.</td></tr>
+</table>
+
+<h2>4. Design choices worth challenging</h2>
+<table>
+  <tr><th>Choice</th><th>Why</th><th>Trade-off</th></tr>
+  <tr><td>Synthetic data</td><td>Publishable and reproducible; planted effects let the methods be checked against a known answer.</td><td>The model can only find what was planted.</td></tr>
+  <tr><td>One event simulation</td><td>Queues, beds and readmissions affect each other as they do in a real hospital.</td><td>Harder to calibrate; took six passes to stop the ward queue growing without bound.</td></tr>
+  <tr><td>Hourly census on the hour</td><td>One table feeds occupancy, staffing and the Now page, and reconciles to source.</td><td>Occupancy is sampled 24 times a day, not integrated minute by minute.</td></tr>
+  <tr><td>Index discharges and 30-day label</td><td>Follows the standard readmission measures.</td><td>Readmissions to other hospitals are invisible.</td></tr>
+  <tr><td>Logistic regression</td><td>As accurate as gradient boosting here, and readable.</td><td>May miss interactions a richer model would catch on real data.</td></tr>
+  <tr><td>Comparing at LACE's flag rate</td><td>Same workload, so the gain is in the readmissions reached.</td><td>Depends on the 19.3% the LACE flag happens to pick.</td></tr>
+  <tr><td>Reasons by factor reset</td><td>Works for any model; plain-language reasons.</td><td>Ignores interactions; not a causal estimate.</td></tr>
+  <tr><td>Generated report</td><td>Reproducible, reviewable in a diff, and every number tested.</td><td>Hand edits in Power BI are overwritten by the next build.</td></tr>
+</table>
+
+<h2>5. What to review</h2>
+<ol>
+  <li><b>Definitions.</b> Do wait time (arrival to first doctor), boarding (admission decision to leaving the ER) and occupancy (hourly census over beds in service) match how you'd define them?</li>
+  <li><b>Leakage.</b> Can any readmission feature see past the discharge? Look at the prior-visit windows and occupancy at the hour of discharge.</li>
+  <li><b>Model.</b> Is the out-of-time split and the LACE comparison fair? Would you report something other than ROC AUC and readmissions caught at a fixed flag rate?</li>
+  <li><b>Fairness.</b> Is the reading of the fairness table convincing, including age as a deliberate feature? What else would you test?</li>
+  <li><b>Checks.</b> Is there a failure mode the 18 checks would miss?</li>
+  <li><b>Report.</b> Can an operations lead tell within a few seconds whether the hospital has beds right now, and when the ER struggles? Is anything misleading?</li>
+</ol>
+
+<h2>6. Known limits</h2>
+<ul>
+  <li>The hospital, its patients and staff are synthetic; costs and billing aren't modelled.</li>
+  <li>Beds are assigned within a unit at random; real hospitals also match by sex, isolation needs and specialty.</li>
+  <li>The roster is planned staffing; the only absence modelled is occasional uncovered sick leave.</li>
+  <li>Tested on Power BI Desktop 2.158 for Windows only.</li>
+</ul>
+
+</main>
+</body>
+</html>
