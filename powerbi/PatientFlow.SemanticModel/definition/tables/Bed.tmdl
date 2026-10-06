@@ -1,0 +1,56 @@
+table Bed
+
+	column bed_id
+		dataType: string
+		summarizeBy: none
+		sourceColumn: bed_id
+
+	column unit
+		dataType: string
+		summarizeBy: none
+		sourceColumn: unit
+
+	column bay
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: bay
+
+	column slot
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: slot
+
+	column bay_label
+		dataType: string
+		summarizeBy: none
+		sourceColumn: bay_label
+
+	column in_service_from
+		dataType: dateTime
+		formatString: Short Date
+		isHidden
+		summarizeBy: none
+		sourceColumn: in_service_from
+
+	partition Bed = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_bed.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"bed_id", type text},
+						{"unit", type text},
+						{"bay", type text},
+						{"slot", Int64.Type},
+						{"bay_label", type text},
+						{"in_service_from", type date}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

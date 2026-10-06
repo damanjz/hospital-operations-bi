@@ -1,0 +1,24 @@
+table 'As-of month'
+
+	column Month
+		dataType: dateTime
+		formatString: Short Date
+		isHidden
+		summarizeBy: none
+		sourceColumn: [Month]
+
+	column Label
+		dataType: string
+		sortByColumn: Month
+		summarizeBy: none
+		sourceColumn: [Label]
+
+	partition 'As-of month' = calculated
+		mode: import
+		source = ```
+				SELECTCOLUMNS (
+				    FILTER ( VALUES ( 'Date'[month] ), 'Date'[month] < DATE ( 2026, 4, 1 ) ),
+				    "Month", 'Date'[month],
+				    "Label", FORMAT ( 'Date'[month], "mmm yyyy" )
+				)
+				```

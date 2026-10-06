@@ -1,0 +1,47 @@
+table Unit
+
+	column unit
+		dataType: string
+		sortByColumn: unit_order
+		summarizeBy: none
+		sourceColumn: unit
+
+	column patients_per_nurse_target
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: patients_per_nurse_target
+
+	column beds
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: beds
+
+	column unit_order
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: unit_order
+
+	partition Unit = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_unit.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"unit", type text},
+						{"patients_per_nurse_target", type number},
+						{"beds", Int64.Type},
+						{"unit_order", Int64.Type}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

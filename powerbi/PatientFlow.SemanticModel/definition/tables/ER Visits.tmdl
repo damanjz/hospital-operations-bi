@@ -1,0 +1,127 @@
+table 'ER Visits'
+
+	column visit_id
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: visit_id
+
+	column arrival_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: arrival_ts
+
+	column arrival_date
+		dataType: dateTime
+		formatString: d mmm yyyy
+		isHidden
+		summarizeBy: none
+		sourceColumn: arrival_date
+
+	column arrival_hour
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: arrival_hour
+
+	column triage_label
+		dataType: string
+		summarizeBy: none
+		sourceColumn: triage_label
+
+	column complaint
+		dataType: string
+		summarizeBy: none
+		sourceColumn: complaint
+
+	column seen_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: seen_ts
+
+	column decision_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: decision_ts
+
+	column departure_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: departure_ts
+
+	column disposition
+		dataType: string
+		summarizeBy: none
+		sourceColumn: disposition
+
+	column wait_min
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: wait_min
+
+	column er_stay_min
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: er_stay_min
+
+	column boarding_min
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: boarding_min
+
+	column left_unseen
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: left_unseen
+
+	column admitted
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: admitted
+
+	partition 'ER Visits' = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "mart_er_visits.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"visit_id", type text},
+						{"arrival_ts", type datetime},
+						{"arrival_date", type date},
+						{"arrival_hour", Int64.Type},
+						{"triage_label", type text},
+						{"complaint", type text},
+						{"seen_ts", type datetime},
+						{"decision_ts", type datetime},
+						{"departure_ts", type datetime},
+						{"disposition", type text},
+						{"wait_min", Int64.Type},
+						{"er_stay_min", Int64.Type},
+						{"boarding_min", Int64.Type},
+						{"left_unseen", type logical},
+						{"admitted", type logical}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

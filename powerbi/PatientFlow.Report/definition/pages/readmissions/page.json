@@ -1,0 +1,20 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/1.4.0/schema.json",
+  "name": "readmissions",
+  "displayName": "Readmissions",
+  "displayOption": "FitToPage",
+  "height": 720,
+  "width": 1280,
+  "visualInteractions": [
+    {
+      "source": "f283cfa25abc4c7f1f23",
+      "target": "dc6f76cb5f9403b2b0b2",
+      "type": "NoFilter"
+    },
+    {
+      "source": "606c65eded3d9a2eae4d",
+      "target": "dc6f76cb5f9403b2b0b2",
+      "type": "NoFilter"
+    }
+  ]
+}

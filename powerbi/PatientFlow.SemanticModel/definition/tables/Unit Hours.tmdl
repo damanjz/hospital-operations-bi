@@ -1,0 +1,111 @@
+table 'Unit Hours'
+
+	column hour_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: hour_ts
+
+	column date
+		dataType: dateTime
+		formatString: Short Date
+		isHidden
+		summarizeBy: none
+		sourceColumn: date
+
+	column hour
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: hour
+
+	column unit
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: unit
+
+	column beds_in_service
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: beds_in_service
+
+	column occupied
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: occupied
+
+	column cleaning
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: cleaning
+
+	column patients
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: patients
+
+	column waiting
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: waiting
+
+	column boarding
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: boarding
+
+	column nurses
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: nurses
+
+	column doctors
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: doctors
+
+	partition 'Unit Hours' = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "fact_unit_hourly.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"hour_ts", type datetime},
+						{"date", type date},
+						{"hour", Int64.Type},
+						{"unit", type text},
+						{"beds_in_service", Int64.Type},
+						{"occupied", Int64.Type},
+						{"cleaning", Int64.Type},
+						{"patients", Int64.Type},
+						{"waiting", Int64.Type},
+						{"boarding", Int64.Type},
+						{"nurses", Int64.Type},
+						{"doctors", Int64.Type}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

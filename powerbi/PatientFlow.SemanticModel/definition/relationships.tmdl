@@ -1,0 +1,35 @@
+relationship f3dfcca0-3aa9-5019-b14d-254f87ddc704
+	fromColumn: 'ER Visits'.arrival_date
+	toColumn: Date.date
+
+relationship bec6e2c4-b9ca-5827-a567-2473ddae0aa4
+	fromColumn: 'Unit Hours'.date
+	toColumn: Date.date
+
+relationship 68537974-4872-502d-9ef0-9714b92c34d5
+	fromColumn: Discharges.discharge_date
+	toColumn: Date.date
+
+relationship 36e2ba31-90fa-5511-885e-cdebfda2f98b
+	fromColumn: 'ER Visits'.arrival_hour
+	toColumn: Hour.hour
+
+relationship a2481768-db15-5ed5-9c2d-c9aaed462cc2
+	fromColumn: 'Unit Hours'.hour
+	toColumn: Hour.hour
+
+relationship 03e94a6e-966b-5b60-bda5-d9b59b6f1854
+	fromColumn: 'Unit Hours'.unit
+	toColumn: Unit.unit
+
+relationship 9de2e20a-0d64-5414-82b7-24785f52ec67
+	fromColumn: Discharges.discharge_unit
+	toColumn: Unit.unit
+
+relationship 2e890b9e-1099-59e3-9be2-6373087ee47d
+	fromColumn: Bed.unit
+	toColumn: Unit.unit
+
+relationship ff6e0ff9-9f37-5026-8577-7d44298eba10
+	fromColumn: 'Bed Stays'.bed_id
+	toColumn: Bed.bed_id

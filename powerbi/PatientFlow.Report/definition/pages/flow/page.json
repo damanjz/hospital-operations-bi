@@ -1,0 +1,25 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/1.4.0/schema.json",
+  "name": "flow",
+  "displayName": "Flow",
+  "displayOption": "FitToPage",
+  "height": 720,
+  "width": 1280,
+  "visualInteractions": [
+    {
+      "source": "c2ee1693e46d6099bfc3",
+      "target": "f37b0531dfd25758fd03",
+      "type": "NoFilter"
+    },
+    {
+      "source": "c2ee1693e46d6099bfc3",
+      "target": "52dc0afef0481a16b482",
+      "type": "NoFilter"
+    },
+    {
+      "source": "c2ee1693e46d6099bfc3",
+      "target": "e5b63cd6dec396d42adf",
+      "type": "NoFilter"
+    }
+  ]
+}

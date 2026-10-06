@@ -1,0 +1,26 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_ProTooling = ["TMDL-Extension"]
+
+ref table Date
+ref table Hour
+ref table Unit
+ref table Bed
+ref table 'Bed Stays'
+ref table 'Unit Hours'
+ref table 'ER Visits'
+ref table Discharges
+ref table 'Model Metrics'
+ref table Metrics
+ref table 'As-of month'
+ref table 'As-of day'
+ref table 'As-of hour'

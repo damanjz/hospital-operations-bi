@@ -1,0 +1,124 @@
+table 'Model Metrics'
+
+	column model
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: model
+
+	column roc_auc
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: roc_auc
+
+	column pr_auc
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: pr_auc
+
+	column brier
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: brier
+
+	column base_rate
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: base_rate
+
+	column top_decile_capture
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: top_decile_capture
+
+	column chosen
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: chosen
+
+	column train_rows
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: train_rows
+
+	column test_rows
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: test_rows
+
+	column train_end
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: train_end
+
+	column test_start
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: test_start
+
+	column lace_high_share
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: lace_high_share
+
+	column lace_high_capture
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: lace_high_capture
+
+	column capture_at_lace_share
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: capture_at_lace_share
+
+	partition 'Model Metrics' = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "model_metrics.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"model", type text},
+						{"roc_auc", type number},
+						{"pr_auc", type number},
+						{"brier", type number},
+						{"base_rate", type number},
+						{"top_decile_capture", type number},
+						{"chosen", type logical},
+						{"train_rows", Int64.Type},
+						{"test_rows", Int64.Type},
+						{"train_end", type text},
+						{"test_start", type text},
+						{"lace_high_share", type number},
+						{"lace_high_capture", type number},
+						{"capture_at_lace_share", type number}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

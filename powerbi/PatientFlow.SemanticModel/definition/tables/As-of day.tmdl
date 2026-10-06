@@ -1,0 +1,11 @@
+table 'As-of day'
+
+	column Day
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: [Day]
+
+	partition 'As-of day' = calculated
+		mode: import
+		source = SELECTCOLUMNS ( GENERATESERIES ( 1, 31, 1 ), "Day", [Value] )

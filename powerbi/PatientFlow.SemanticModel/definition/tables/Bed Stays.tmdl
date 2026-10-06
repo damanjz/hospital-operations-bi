@@ -1,0 +1,68 @@
+table 'Bed Stays'
+
+	column stay_id
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: stay_id
+
+	column admission_id
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: admission_id
+
+	column bed_id
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: bed_id
+
+	column unit
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: unit
+
+	column start_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: start_ts
+
+	column end_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: end_ts
+
+	column ready_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: ready_ts
+
+	partition 'Bed Stays' = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "fact_bed_stays.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"stay_id", type text},
+						{"admission_id", type text},
+						{"bed_id", type text},
+						{"unit", type text},
+						{"start_ts", type datetime},
+						{"end_ts", type datetime},
+						{"ready_ts", type datetime}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

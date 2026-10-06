@@ -1,0 +1,210 @@
+table Discharges
+
+	column admission_id
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: admission_id
+
+	column discharge_ts
+		dataType: dateTime
+		formatString: yyyy-mm-dd hh:nn
+		isHidden
+		summarizeBy: none
+		sourceColumn: discharge_ts
+
+	column discharge_date
+		dataType: dateTime
+		formatString: d mmm
+		summarizeBy: none
+		sourceColumn: discharge_date
+
+	column discharge_unit
+		dataType: string
+		summarizeBy: none
+		sourceColumn: discharge_unit
+
+	column diagnosis
+		dataType: string
+		summarizeBy: none
+		sourceColumn: diagnosis
+
+	column admission_type
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: admission_type
+
+	column age
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: age
+
+	column age_group
+		dataType: string
+		summarizeBy: none
+		sourceColumn: age_group
+
+	column los_days
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: los_days
+
+	column los_band
+		dataType: string
+		sortByColumn: los_band_order
+		summarizeBy: none
+		sourceColumn: los_band
+
+	column los_band_order
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: los_band_order
+
+	column charlson
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: charlson
+
+	column er_visits_6m
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: er_visits_6m
+
+	column occupancy_at_discharge
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: occupancy_at_discharge
+
+	column occupancy_band
+		dataType: string
+		sortByColumn: occupancy_band_order
+		summarizeBy: none
+		sourceColumn: occupancy_band
+
+	column occupancy_band_order
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: occupancy_band_order
+
+	column weekend_discharge
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: weekend_discharge
+
+	column outcome_known
+		dataType: boolean
+		summarizeBy: none
+		sourceColumn: outcome_known
+
+	column readmitted_30d
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: readmitted_30d
+
+	column lace
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: lace
+
+	column lace_high
+		dataType: boolean
+		isHidden
+		summarizeBy: none
+		sourceColumn: lace_high
+
+	column risk_score
+		dataType: double
+		formatString: #,0.00
+		isHidden
+		summarizeBy: none
+		sourceColumn: risk_score
+
+	column risk_percentile
+		dataType: double
+		formatString: 0.0%
+		summarizeBy: none
+		sourceColumn: risk_percentile
+
+	column risk_band
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: risk_band
+
+	column drivers
+		dataType: string
+		summarizeBy: none
+		sourceColumn: drivers
+
+	column sex
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: sex
+
+	column payer
+		dataType: string
+		isHidden
+		summarizeBy: none
+		sourceColumn: payer
+
+	partition Discharges = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "mart_discharges.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"admission_id", type text},
+						{"discharge_ts", type datetime},
+						{"discharge_date", type date},
+						{"discharge_unit", type text},
+						{"diagnosis", type text},
+						{"admission_type", type text},
+						{"age", Int64.Type},
+						{"age_group", type text},
+						{"los_days", type number},
+						{"los_band", type text},
+						{"los_band_order", Int64.Type},
+						{"charlson", Int64.Type},
+						{"er_visits_6m", Int64.Type},
+						{"occupancy_at_discharge", type number},
+						{"occupancy_band", type text},
+						{"occupancy_band_order", Int64.Type},
+						{"weekend_discharge", Int64.Type},
+						{"outcome_known", type logical},
+						{"readmitted_30d", Int64.Type},
+						{"lace", Int64.Type},
+						{"lace_high", type logical},
+						{"risk_score", type number},
+						{"risk_percentile", type number},
+						{"risk_band", type text},
+						{"drivers", type text},
+						{"sex", type text},
+						{"payer", type text}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

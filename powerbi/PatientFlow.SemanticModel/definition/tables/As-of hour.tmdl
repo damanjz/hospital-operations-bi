@@ -1,0 +1,11 @@
+table 'As-of hour'
+
+	column Hour
+		dataType: int64
+		formatString: 0
+		summarizeBy: none
+		sourceColumn: [Hour]
+
+	partition 'As-of hour' = calculated
+		mode: import
+		source = SELECTCOLUMNS ( GENERATESERIES ( 0, 23, 1 ), "Hour", [Value] )

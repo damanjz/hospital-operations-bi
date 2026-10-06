@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "SemanticModel",
+    "displayName": "PatientFlow"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "8251eed8-5393-5311-a7c3-dbb0a5dcb9d0"
+  }
+}

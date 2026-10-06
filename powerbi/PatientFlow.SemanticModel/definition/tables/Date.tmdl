@@ -1,0 +1,67 @@
+table Date
+
+	column date
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: date
+
+	column month
+		dataType: dateTime
+		formatString: Short Date
+		summarizeBy: none
+		sourceColumn: month
+
+	column month_label
+		dataType: string
+		isHidden
+		sortByColumn: month_index
+		summarizeBy: none
+		sourceColumn: month_label
+
+	column month_index
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: month_index
+
+	column fiscal_year
+		dataType: string
+		summarizeBy: none
+		sourceColumn: fiscal_year
+
+	column weekday
+		dataType: string
+		sortByColumn: weekday_num
+		summarizeBy: none
+		sourceColumn: weekday
+
+	column weekday_num
+		dataType: int64
+		formatString: 0
+		isHidden
+		summarizeBy: none
+		sourceColumn: weekday_num
+
+	partition Date = m
+		mode: import
+		source =
+				let
+				    Source = Csv.Document(File.Contents(DataFolder & "dim_date.csv"), [Delimiter = ",", Encoding = 65001, QuoteStyle = QuoteStyle.Csv]),
+				    #"Promoted headers" = Table.PromoteHeaders(Source, [PromoteAllScalars = true]),
+				    #"Typed columns" = Table.TransformColumnTypes(
+				        #"Promoted headers",
+				        {
+						{"date", type date},
+						{"month", type date},
+						{"month_label", type text},
+						{"month_index", Int64.Type},
+						{"fiscal_year", type text},
+						{"weekday", type text},
+						{"weekday_num", Int64.Type}
+				        },
+				        "en-US"
+				    )
+				in
+				    #"Typed columns"

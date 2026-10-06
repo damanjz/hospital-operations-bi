@@ -1,0 +1,250 @@
+table Metrics
+
+	/// The moment shown on the Now page.
+	measure 'As-of time' = ```
+			VAR m = SELECTEDVALUE ( 'As-of month'[Month], DATE ( 2024, 9, 1 ) )
+			VAR d = MIN ( SELECTEDVALUE ( 'As-of day'[Day], 16 ), DAY ( EOMONTH ( m, 0 ) ) )
+			VAR h = SELECTEDVALUE ( 'As-of hour'[Hour], 20 )
+			RETURN m + d - 1 + TIME ( h, 0, 0 )
+			```
+		formatString: ddd d mmm yyyy hh:nn
+
+	/// State of one bed at the as-of time.
+	measure 'Bed status' = ```
+			VAR t = [As-of time]
+			VAR opened = SELECTEDVALUE ( Bed[in_service_from] )
+			VAR occ =
+			    CALCULATE (
+			        COUNTROWS ( 'Bed Stays' ),
+			        'Bed Stays'[start_ts] <= t,
+			        ISBLANK ( 'Bed Stays'[end_ts] ) || 'Bed Stays'[end_ts] > t
+			    )
+			VAR cleaning =
+			    CALCULATE (
+			        COUNTROWS ( 'Bed Stays' ),
+			        NOT ISBLANK ( 'Bed Stays'[end_ts] ),
+			        'Bed Stays'[end_ts] <= t,
+			        ISBLANK ( 'Bed Stays'[ready_ts] ) || 'Bed Stays'[ready_ts] > t
+			    )
+			RETURN
+			    IF (
+			        HASONEVALUE ( Bed[bed_id] ),
+			        SWITCH ( TRUE (), opened > t, "Not yet open", occ > 0, "Occupied", cleaning > 0, "Being cleaned", "Free" )
+			    )
+			```
+
+	/// A character drawn in the cell colour, so every bed is a full-height cell.
+	measure 'Bed cell' = IF ( NOT ISBLANK ( [Bed status] ), "o" )
+
+	/// Colour of a bed cell.
+	measure 'Bed colour' = SWITCH ( [Bed status], "Occupied", "#2f55b0", "Being cleaned", "#c27a1a", "Free", "#e3ded2", "#fbfaf7" )
+
+	/// Beds with a patient in them at the as-of hour.
+	measure 'Occupied now' = ```
+			VAR t = [As-of time]
+			RETURN CALCULATE ( SUM ( 'Unit Hours'[occupied] ), 'Unit Hours'[hour_ts] = t )
+			```
+		formatString: 0
+
+	/// Beds in service at the as-of hour.
+	measure 'Beds now' = ```
+			VAR t = [As-of time]
+			RETURN CALCULATE ( SUM ( 'Unit Hours'[beds_in_service] ), 'Unit Hours'[hour_ts] = t )
+			```
+		formatString: 0
+
+	/// Beds emptied and waiting for housekeeping.
+	measure 'Cleaning now' = ```
+			VAR t = [As-of time]
+			RETURN CALCULATE ( SUM ( 'Unit Hours'[cleaning] ), 'Unit Hours'[hour_ts] = t )
+			```
+		formatString: 0
+
+	/// Beds clean and ready for a patient.
+	measure 'Free now' = [Beds now] - [Occupied now] - [Cleaning now]
+		formatString: 0
+
+	/// Occupied beds as a share of beds in service.
+	measure 'Occupancy now' = DIVIDE ( [Occupied now], [Beds now] )
+		formatString: 0%
+
+	/// Occupied of total beds.
+	measure 'Beds label' = [Occupied now] & " of " & [Beds now]
+
+	/// Patients in the ER not yet seen by a doctor.
+	measure 'ER waiting now' = ```
+			VAR t = [As-of time]
+			RETURN
+			    CALCULATE (
+			        COUNTROWS ( 'ER Visits' ),
+			        'ER Visits'[arrival_ts] <= t,
+			        'ER Visits'[arrival_ts] > t - 2,
+			        FILTER (
+			            'ER Visits',
+			            VAR seenOrLeft = IF ( ISBLANK ( 'ER Visits'[seen_ts] ), 'ER Visits'[departure_ts], 'ER Visits'[seen_ts] )
+			            RETURN ISBLANK ( seenOrLeft ) || seenOrLeft > t
+			        )
+			    ) + 0
+			```
+		formatString: 0
+
+	/// Admitted patients still in the ER, waiting for a bed.
+	measure 'Boarding now' = ```
+			VAR t = [As-of time]
+			RETURN CALCULATE ( SUM ( 'Unit Hours'[boarding] ), 'Unit Hours'[hour_ts] = t, 'Unit Hours'[unit] = "ER" )
+			```
+		formatString: 0
+
+	/// Minutes the longest-waiting ER patient has been waiting.
+	measure 'Longest wait now' = ```
+			VAR t = [As-of time]
+			VAR waiting =
+			    CALCULATETABLE (
+			        'ER Visits',
+			        'ER Visits'[arrival_ts] <= t,
+			        'ER Visits'[arrival_ts] > t - 2,
+			        FILTER (
+			            'ER Visits',
+			            VAR seenOrLeft = IF ( ISBLANK ( 'ER Visits'[seen_ts] ), 'ER Visits'[departure_ts], 'ER Visits'[seen_ts] )
+			            RETURN ISBLANK ( seenOrLeft ) || seenOrLeft > t
+			        )
+			    )
+			RETURN IF ( COUNTROWS ( waiting ) > 0, ROUND ( ( t - MINX ( waiting, 'ER Visits'[arrival_ts] ) ) * 1440, 0 ) )
+			```
+		formatString: "0"" min"""
+
+	/// Patients per nurse on duty at the as-of hour.
+	measure 'Patients per nurse now' = ```
+			VAR t = [As-of time]
+			RETURN
+			    DIVIDE (
+			        CALCULATE ( SUM ( 'Unit Hours'[patients] ), 'Unit Hours'[hour_ts] = t ),
+			        CALCULATE ( SUM ( 'Unit Hours'[nurses] ), 'Unit Hours'[hour_ts] = t )
+			    )
+			```
+		formatString: 0.0
+
+	/// Planned patients per nurse for the unit.
+	measure 'Nurse ratio target' = MAX ( Unit[patients_per_nurse_target] )
+		formatString: 0.0
+
+	/// The as-of moment as a heading.
+	measure 'As-of heading' = ```
+			VAR t = [As-of time]
+			RETURN FORMAT ( t, "dddd d mmmm yyyy" ) & ", " & FORMAT ( t, "hh:nn" )
+			```
+
+	/// One-line reading of the Now page.
+	measure 'Insight: now' = ```
+			VAR t = [As-of time]
+			RETURN
+			    FORMAT ( t, "hh:nn" ) & " on " & FORMAT ( t, "dddd d mmmm yyyy" ) & ": " & [Occupied now] & " of " & [Beds now]
+			        & " beds are taken, " & [Free now] & " are ready and " & [ER waiting now]
+			        & " people are waiting to see an ER doctor." 
+			```
+
+	/// Median minutes from ER arrival to first doctor.
+	measure 'Median wait' = MEDIAN ( 'ER Visits'[wait_min] )
+		formatString: "0"" min"""
+
+	/// Share of finished ER visits where the patient left before a doctor saw them.
+	measure 'Left without being seen' = ```
+			DIVIDE (
+			    CALCULATE ( COUNTROWS ( 'ER Visits' ), 'ER Visits'[left_unseen] = TRUE () ),
+			    CALCULATE ( COUNTROWS ( 'ER Visits' ), NOT ISBLANK ( 'ER Visits'[left_unseen] ) )
+			)
+			```
+		formatString: 0.0%
+
+	/// ER arrivals.
+	measure 'ER arrivals' = COUNTROWS ( 'ER Visits' )
+		formatString: #,0
+
+	/// Average ER arrivals in an hour: arrivals divided by the days in context.
+	measure 'Arrivals per hour' = DIVIDE ( COUNTROWS ( 'ER Visits' ), COUNTROWS ( 'Date' ) )
+		formatString: 0.0
+
+	/// Average of hourly census divided by beds in service.
+	measure 'Bed occupancy' = DIVIDE ( SUM ( 'Unit Hours'[occupied] ), SUM ( 'Unit Hours'[beds_in_service] ) )
+		formatString: 0.0%
+
+	/// Patients per nurse on duty, averaged over every hour.
+	measure 'Patients per nurse' = DIVIDE ( SUM ( 'Unit Hours'[patients] ), SUM ( 'Unit Hours'[nurses] ) )
+		formatString: 0.0
+
+	/// Average hours an admitted patient waited in the ER for a bed.
+	measure 'Average boarding' = DIVIDE ( AVERAGE ( 'ER Visits'[boarding_min] ), 60 )
+		formatString: "0.0"" h"""
+
+	/// Heatmap colour for arrivals per hour.
+	measure 'Arrivals colour' = ```
+			VAR i = IF ( ISBLANK ( [Arrivals per hour] ), BLANK (), INT ( MIN ( 7, MAX ( 0, DIVIDE ( [Arrivals per hour] - 0, 13 - 0 ) * 8 ) ) ) )
+			RETURN SWITCH ( TRUE (), ISBLANK ( i ), "#fbfaf7", i = 0, "#f2efe7", i = 1, "#dfe2ea", i = 2, "#c6cee2", i = 3, "#a6b5d8", i = 4, "#8299cb", i = 5, "#5d7cbe", i = 6, "#3f62b4", i = 7, "#2a4a96" )
+			```
+
+	/// Heatmap colour for the median wait.
+	measure 'Wait colour' = ```
+			VAR i = IF ( ISBLANK ( [Median wait] ), BLANK (), INT ( MIN ( 7, MAX ( 0, DIVIDE ( [Median wait] - 0, 150 - 0 ) * 8 ) ) ) )
+			RETURN SWITCH ( TRUE (), ISBLANK ( i ), "#fbfaf7", i = 0, "#f2efe7", i = 1, "#dfe2ea", i = 2, "#c6cee2", i = 3, "#a6b5d8", i = 4, "#8299cb", i = 5, "#5d7cbe", i = 6, "#3f62b4", i = 7, "#2a4a96" )
+			```
+
+	/// Rounded arrivals per hour for the heatmap.
+	measure 'Heat cell' = FORMAT ( [Arrivals per hour], "0" )
+
+	/// Rounded median wait for the heatmap.
+	measure 'Wait cell' = FORMAT ( [Median wait], "0" )
+
+	/// One-line reading of the flow page.
+	measure 'Insight: flow' = ```
+			VAR eve = CALCULATE ( [Median wait], Hour[shift] = "Evening" )
+			VAR morn = CALCULATE ( [Median wait], Hour[shift] = "Morning" )
+			RETURN
+			    "Evening arrivals wait a median " & FORMAT ( eve, "0" ) & " min for a doctor, morning arrivals "
+			        & FORMAT ( morn, "0" ) & " min. Beds peak in the Aug to Oct dengue season." 
+			```
+
+	/// Share of patients sent home who had an emergency readmission within 30 days.
+	measure 'Readmission rate' = DIVIDE ( SUM ( Discharges[readmitted_30d] ), COUNT ( Discharges[readmitted_30d] ) )
+		formatString: 0.0%
+
+	/// Discharges home with 30 days of follow-up.
+	measure 'Discharges home' = COUNT ( Discharges[readmitted_30d] )
+		formatString: #,0
+
+	/// Emergency readmissions within 30 days.
+	measure Readmissions = SUM ( Discharges[readmitted_30d] )
+		formatString: #,0
+
+	/// Share of readmissions the LACE high-risk flag (score 10 or more) had caught.
+	measure 'LACE catch rate' = DIVIDE ( CALCULATE ( SUM ( Discharges[readmitted_30d] ), Discharges[lace_high] = TRUE () ), SUM ( Discharges[readmitted_30d] ) )
+		formatString: 0%
+
+	/// Out-of-time ROC AUC of the chosen model against the LACE index.
+	measure 'Model vs LACE' = ```
+			VAR m = CALCULATE ( MAX ( 'Model Metrics'[roc_auc] ), 'Model Metrics'[chosen] = TRUE () )
+			VAR l = CALCULATE ( MAX ( 'Model Metrics'[roc_auc] ), 'Model Metrics'[model] = "LACE index" )
+			RETURN FORMAT ( m, "0.00" ) & " vs " & FORMAT ( l, "0.00" )
+			```
+
+	/// Where the patient's risk score ranks among all discharges.
+	measure 'Risk percentile' = MAX ( Discharges[risk_percentile] )
+		formatString: 0%
+
+	/// One-line reading of the readmissions page.
+	measure 'Insight: readmissions' = ```
+			VAR full = CALCULATE ( [Readmission rate], Discharges[occupancy_band] = "95% or more" )
+			VAR calm = CALCULATE ( [Readmission rate], Discharges[occupancy_band] = "Under 85%" )
+			RETURN
+			    "Sent home from a unit 95% full or more: " & FORMAT ( full, "0.0%" ) & " come back. Under 85% full: "
+			        & FORMAT ( calm, "0.0%" ) & "." 
+			```
+
+	column Value
+		dataType: int64
+		isHidden
+		summarizeBy: none
+		sourceColumn: [Value]
+
+	partition Metrics = calculated
+		mode: import
+		source = { 1 }
